@@ -2,6 +2,8 @@ package domain
 
 import (
 	"time"
+
+	"github.com/tmozzze/SasPosts/utils"
 )
 
 type Post struct {
@@ -15,7 +17,7 @@ type Post struct {
 
 func NewPost(title, content, authorId string, allowComments bool) *Post {
 	return &Post{
-		ID:            generateID(),
+		ID:            utils.GenerateID(),
 		Title:         title,
 		Content:       content,
 		AuthorId:      authorId,
@@ -23,5 +25,3 @@ func NewPost(title, content, authorId string, allowComments bool) *Post {
 		AllowComments: allowComments,
 	}
 }
-
-//TODO: generateID
