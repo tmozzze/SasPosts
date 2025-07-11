@@ -16,6 +16,14 @@ type inMemoryCommentRepository struct {
 	byParent map[string][]string
 }
 
+func NewInMemoryCommentRepository() *inMemoryCommentRepository {
+	return &inMemoryCommentRepository{
+		comments: make(map[string]*domain.Comment),
+		byPost:   make(map[string][]string),
+		byParent: make(map[string][]string),
+	}
+}
+
 func (r *inMemoryCommentRepository) Create(ctx context.Context, comment *domain.Comment) error {
 	if utf8.RuneCountInString(comment.Content) > domain.MaxCommentLength {
 		return domain.ErrCommentTooLong
@@ -30,7 +38,7 @@ func (r *inMemoryCommentRepository) Create(ctx context.Context, comment *domain.
 	} else {
 		parent, exists := r.comments[*comment.ParentID]
 		if !exists {
-			return domain.ErrCommentNotFound
+			return domain.ErrParentCommentNotFound
 		}
 		comment.Path = parent.Path + "." + comment.ID
 		comment.Depth = parent.Depth + 1

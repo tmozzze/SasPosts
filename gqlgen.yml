@@ -1,0 +1,13 @@
+schema:
+  - internal/transport/graphql/schema.graphqls
+exec:
+  filename: internal/transport/graphql/generated.go
+  package: graphql
+model:
+  filename: internal/transport/graphql/models_gen.go
+  package: graphql
+resolver:
+  filename: internal/transport/graphql/resolver.go
+  type: Resolver
+autobind:
+  - github.com/tmozzze/SasPosts/internal/domain
