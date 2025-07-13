@@ -10,17 +10,17 @@ type Post struct {
 	ID            string    `json:"id"`
 	Title         string    `json:"title"`
 	Content       string    `json:"content"`
-	AuthorID      string    `json:"authorId"`
+	Author        string    `json:"author"`
 	CreatedAt     time.Time `json:"createdAt"`
 	AllowComments bool      `json:"allowComments"`
 }
 
-func NewPost(title, content, authorID string, allowComments bool) *Post {
+func NewPost(title, content, author string, allowComments bool) *Post {
 	return &Post{
 		ID:            utils.GenerateID(),
 		Title:         title,
 		Content:       content,
-		AuthorID:      authorID,
+		Author:        author,
 		CreatedAt:     time.Now(),
 		AllowComments: allowComments,
 	}

@@ -91,7 +91,7 @@ func (r *InMemoryPostRepository) Delete(ctx context.Context, postID string) erro
 	return nil
 }
 
-func (r *InMemoryPostRepository) CheckAllowdComments(ctx context.Context, postID string) (bool, error) {
+func (r *InMemoryPostRepository) CheckAllowedComments(ctx context.Context, postID string) (bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 

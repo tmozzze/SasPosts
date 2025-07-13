@@ -11,7 +11,7 @@ import (
 type Comment struct {
 	ID        string    `json:"id"`
 	PostID    string    `json:"postId"`
-	AuthorID  string    `json:"authorId"`
+	Author    string    `json:"author"`
 	ParentID  *string   `json:"parentId,omitempty"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -21,18 +21,18 @@ type Comment struct {
 
 const MaxCommentLength = 2000
 
-func NewComment(postID, authorID string, parentID *string, content string) (*Comment, error) {
+func NewComment(postID, author string, parentID *string, content string) (*Comment, error) {
 	if utf8.RuneCountInString(content) > MaxCommentLength {
 		return nil, ErrCommentTooLong
 	}
-	if postID == "" || authorID == "" {
-		return nil, errors.New("postID and authorID cannot be empty")
+	if postID == "" || author == "" {
+		return nil, errors.New("postID and author cannot be empty")
 	}
 
 	comment := &Comment{
 		ID:        utils.GenerateID(),
 		PostID:    postID,
-		AuthorID:  authorID,
+		Author:    author,
 		ParentID:  parentID, // nil если коммент - корень
 		Content:   content,
 		CreatedAt: time.Now(),

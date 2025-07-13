@@ -31,7 +31,7 @@ func (r *PostgresCommentRepository) Create(ctx context.Context, comment *domain.
 		var parentPath string
 		var parentDepth int
 
-		query := `SELECT path, depth FROM comments WHERE ide = $1`
+		query := `SELECT path, depth FROM comments WHERE id = $1`
 		err := r.db.QueryRow(ctx, query, *comment.ParentID).Scan(&parentPath, &parentDepth)
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -51,7 +51,7 @@ func (r *PostgresCommentRepository) Create(ctx context.Context, comment *domain.
 		comment.ID,
 		comment.PostID,
 		comment.ParentID,
-		comment.AuthorID,
+		comment.Author,
 		comment.Content,
 		comment.Path,
 		comment.Depth,
@@ -76,7 +76,7 @@ func (r *PostgresCommentRepository) GetByID(ctx context.Context, id string) (*do
 		&comment.ID,
 		&comment.PostID,
 		&scannedParentID,
-		&comment.AuthorID,
+		&comment.Author,
 		&comment.Content,
 		&comment.Path,
 		&comment.Depth,
@@ -99,7 +99,7 @@ func (r *PostgresCommentRepository) GetByID(ctx context.Context, id string) (*do
 
 func (r *PostgresCommentRepository) GetByPost(ctx context.Context, postID string, limit int, offset int) ([]*domain.Comment, error) {
 	query := `SELECT id, post_id, parent_id, author, content, path, depth, created_at
-			  FROM comment WHERE post_id = $1 AND parent_id IS NULL
+			  FROM comments WHERE post_id = $1 AND parent_id IS NULL
 			  ORDER BY created_at ASC
 			  LIMIT $2 OFFSET $3`
 
@@ -120,7 +120,7 @@ func (r *PostgresCommentRepository) GetByPost(ctx context.Context, postID string
 			&comment.ID,
 			&comment.PostID,
 			&scannedParentID,
-			&comment.AuthorID,
+			&comment.Author,
 			&comment.Content,
 			&comment.Path,
 			&comment.Depth,
@@ -161,8 +161,8 @@ func (r *PostgresCommentRepository) GetChildren(ctx context.Context, parentID st
 		if err := rows.Scan(
 			&comment.ID,
 			&comment.PostID,
-			&parentID,
-			&comment.AuthorID,
+			&scannedParentID,
+			&comment.Author,
 			&comment.Content,
 			&comment.Path,
 			&comment.Depth,
@@ -195,7 +195,7 @@ func (r *PostgresCommentRepository) CountByPost(ctx context.Context, postID stri
 	return count, nil
 }
 
-func (r *PostgresCommentRepository) CountByChildren(ctx context.Context, parentID string) (int, error) {
+func (r *PostgresCommentRepository) CountChildren(ctx context.Context, parentID string) (int, error) {
 	query := `SELECT COUNT(*) FROM comments WHERE parent_id = $1`
 
 	var count int

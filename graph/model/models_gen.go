@@ -2,25 +2,48 @@
 
 package model
 
+import (
+	"time"
+)
+
+type Comment struct {
+	ID        string     `json:"id"`
+	PostID    string     `json:"postID"`
+	ParentID  *string    `json:"parentID,omitempty"`
+	Author    string     `json:"author"`
+	Content   string     `json:"content"`
+	CreatedAt time.Time  `json:"createdAt"`
+	Children  []*Comment `json:"children"`
+}
+
 type Mutation struct {
 }
 
-type NewTodo struct {
-	Text   string `json:"text"`
-	UserID string `json:"userId"`
+type NewCommentInput struct {
+	PostID   string  `json:"postID"`
+	ParentID *string `json:"parentID,omitempty"`
+	Author   string  `json:"author"`
+	Content  string  `json:"content"`
+}
+
+type NewPostInput struct {
+	Title         string `json:"title"`
+	Content       string `json:"content"`
+	Author        string `json:"author"`
+	AllowComments bool   `json:"allowComments"`
+}
+
+type Post struct {
+	ID            string     `json:"id"`
+	Title         string     `json:"title"`
+	Content       string     `json:"content"`
+	Author        string     `json:"author"`
+	AllowComments bool       `json:"allowComments"`
+	Comments      []*Comment `json:"comments"`
 }
 
 type Query struct {
 }
 
-type Todo struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
-	Done bool   `json:"done"`
-	User *User  `json:"user"`
-}
-
-type User struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+type Subscription struct {
 }

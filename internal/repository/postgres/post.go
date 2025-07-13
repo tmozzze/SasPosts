@@ -31,7 +31,7 @@ func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) 
 		post.ID,
 		post.Title,
 		post.Content,
-		post.AuthorID,
+		post.Author,
 		post.AllowComments,
 		post.CreatedAt,
 	)
@@ -43,7 +43,7 @@ func (r *PostgresPostRepository) Create(ctx context.Context, post *domain.Post) 
 	return nil
 }
 
-func (r *PostgresPostRepository) GetById(ctx context.Context, id string) (*domain.Post, error) {
+func (r *PostgresPostRepository) GetByID(ctx context.Context, id string) (*domain.Post, error) {
 	query := `SELECT id, title, content, author, allow_comments, created_at 
 	          FROM posts WHERE id = $1`
 	var post domain.Post
@@ -51,7 +51,7 @@ func (r *PostgresPostRepository) GetById(ctx context.Context, id string) (*domai
 		&post.ID,
 		&post.Title,
 		&post.Content,
-		&post.AuthorID,
+		&post.Author,
 		&post.AllowComments,
 		&post.CreatedAt,
 	)
@@ -82,7 +82,7 @@ func (r *PostgresPostRepository) GetAll(ctx context.Context) ([]*domain.Post, er
 			&post.ID,
 			&post.Title,
 			&post.Content,
-			&post.AuthorID,
+			&post.Author,
 			&post.AllowComments,
 			&post.CreatedAt,
 		)
@@ -105,7 +105,7 @@ func (r *PostgresPostRepository) ToggleComments(ctx context.Context, postID stri
 
 	commandTag, err := r.db.Exec(ctx, query, allow, postID)
 	if err != nil {
-		return fmt.Errorf("failed toggle comments: %w", err)
+		return fmt.Errorf("failed toggle comments %w", err)
 	}
 
 	if commandTag.RowsAffected() == 0 {
@@ -122,7 +122,7 @@ func (r *PostgresPostRepository) Update(ctx context.Context, post *domain.Post) 
 	commantTag, err := r.db.Exec(ctx, query,
 		post.Title,
 		post.Content,
-		post.AuthorID,
+		post.Author,
 		post.AllowComments,
 		post.ID,
 	)
@@ -154,7 +154,7 @@ func (r *PostgresPostRepository) Delete(ctx context.Context, postID string) erro
 	return nil
 }
 
-func (r *PostgresPostRepository) CheckAllowdComments(ctx context.Context, postID string) (bool, error) {
+func (r *PostgresPostRepository) CheckAllowedComments(ctx context.Context, postID string) (bool, error) {
 	query := `SELECT allow_comments FROM posts WHERE id = $1`
 
 	var allowComments bool

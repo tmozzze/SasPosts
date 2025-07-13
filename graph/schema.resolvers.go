@@ -9,16 +9,186 @@ import (
 	"fmt"
 
 	"github.com/tmozzze/SasPosts/graph/model"
+	"github.com/tmozzze/SasPosts/internal/domain"
 )
 
-// CreateTodo is the resolver for the createTodo field.
-func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error) {
-	panic(fmt.Errorf("not implemented: CreateTodo - createTodo"))
+type mutationResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }
+type postResolver struct{ *Resolver }
+type commentResolver struct{ *Resolver }
+
+// CreatePost is the resolver for the createPost field.
+func (r *mutationResolver) CreatePost(ctx context.Context, input model.NewPostInput) (*model.Post, error) {
+	domainPost := &domain.Post{
+		Title:         input.Title,
+		Content:       input.Content,
+		Author:        input.Author,
+		AllowComments: input.AllowComments,
+	}
+
+	if err := r.PostRepo.Create(ctx, domainPost); err != nil {
+		return nil, fmt.Errorf("ошибка при создании поста: %w", err)
+	}
+
+	return &model.Post{
+		ID:            domainPost.ID,
+		Title:         domainPost.Title,
+		Content:       domainPost.Content,
+		Author:        domainPost.Author,
+		AllowComments: domainPost.AllowComments,
+	}, nil
 }
 
-// Todos is the resolver for the todos field.
-func (r *queryResolver) Todos(ctx context.Context) ([]*model.Todo, error) {
-	panic(fmt.Errorf("not implemented: Todos - todos"))
+// CreateComment is the resolver for the createComment field.
+func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCommentInput) (*model.Comment, error) {
+	allowed, err := r.PostRepo.CheckAllowedComments(ctx, input.PostID)
+	if err != nil {
+		return nil, fmt.Errorf("failed check allowed comments %w", err)
+	}
+	if !allowed {
+		return nil, domain.ErrCommentsOff
+	}
+
+	domainComment, err := domain.NewComment(input.PostID, input.Author, input.ParentID, input.Content)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.CommentRepo.Create(ctx, domainComment); err != nil {
+		return nil, fmt.Errorf("failed create comment %w", err)
+	}
+
+	return &model.Comment{
+		ID:        domainComment.ID,
+		PostID:    domainComment.PostID,
+		ParentID:  domainComment.ParentID,
+		Author:    domainComment.Author,
+		Content:   domainComment.Content,
+		CreatedAt: domainComment.CreatedAt,
+	}, nil
+}
+
+// ToggleComments is the resolver for the toggleComments field.
+func (r *mutationResolver) ToggleComments(ctx context.Context, postID string, allow bool) (*model.Post, error) {
+	domainPost, err := r.PostRepo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.PostRepo.ToggleComments(ctx, postID, allow); err != nil {
+		return nil, err
+	}
+
+	return &model.Post{
+		ID:            domainPost.ID,
+		Title:         domainPost.Title,
+		Content:       domainPost.Content,
+		Author:        domainPost.Author,
+		AllowComments: allow,
+	}, nil
+}
+
+// Posts is the resolver for the posts field.
+func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
+	domainPosts, err := r.PostRepo.GetAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	modelPosts := make([]*model.Post, 0, len(domainPosts))
+	for _, p := range domainPosts {
+		modelPosts = append(modelPosts, &model.Post{
+			ID:            p.ID,
+			Title:         p.Title,
+			Content:       p.Content,
+			Author:        p.Author,
+			AllowComments: p.AllowComments,
+		})
+	}
+
+	return modelPosts, nil
+}
+
+// Post is the resolver for the post field.
+func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
+	domainPost, err := r.PostRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Post{
+		ID:            domainPost.ID,
+		Title:         domainPost.Title,
+		Content:       domainPost.Content,
+		Author:        domainPost.Author,
+		AllowComments: domainPost.AllowComments,
+	}, nil
+}
+
+// Comments is the resolver for the comments field.
+func (r *postResolver) Comments(ctx context.Context, obj *model.Post, limit *int, offset *int) ([]*model.Comment, error) {
+	l, o := 10, 0
+	if limit != nil {
+		l = *limit
+	}
+	if offset != nil {
+		o = *offset
+	}
+
+	domainComments, err := r.CommentRepo.GetByPost(ctx, obj.ID, l, o)
+	if err != nil {
+		return nil, err
+	}
+
+	modelComments := make([]*model.Comment, 0, len(domainComments))
+	for _, c := range domainComments {
+		modelComments = append(modelComments, &model.Comment{
+			ID:        c.ID,
+			PostID:    c.PostID,
+			ParentID:  c.ParentID,
+			Author:    c.Author,
+			Content:   c.Content,
+			CreatedAt: c.CreatedAt,
+		})
+	}
+
+	return modelComments, nil
+}
+
+// Children is the resolver for the children field
+func (r *commentResolver) Children(ctx context.Context, obj *model.Comment, limit *int, offset *int) ([]*model.Comment, error) {
+	l, o := 5, 0
+	if limit != nil {
+		l = *limit
+	}
+	if offset != nil {
+		o = *offset
+	}
+
+	domainComments, err := r.CommentRepo.GetChildren(ctx, obj.ID, l, o)
+	if err != nil {
+		return nil, err
+	}
+
+	modelComments := make([]*model.Comment, 0, len(domainComments))
+	for _, c := range domainComments {
+		modelComments = append(modelComments, &model.Comment{
+			ID:        c.ID,
+			PostID:    c.PostID,
+			ParentID:  c.ParentID,
+			Author:    c.Author,
+			Content:   c.Content,
+			CreatedAt: c.CreatedAt,
+		})
+	}
+
+	return modelComments, nil
+}
+
+// CommentAdded is the resolver for the commentAdded field.
+func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *model.Comment, error) {
+	panic(fmt.Errorf("not implemented: CommentAdded - commentAdded"))
 }
 
 // Mutation returns MutationResolver implementation.
@@ -27,5 +197,20 @@ func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }
+// Subscription returns SubscriptionResolver implementation.
+func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionResolver{r} }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+/*
+	func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error) {
+	panic(fmt.Errorf("not implemented: CreateTodo - createTodo"))
+}
+func (r *queryResolver) Todos(ctx context.Context) ([]*model.Todo, error) {
+	panic(fmt.Errorf("not implemented: Todos - todos"))
+}
+*/
