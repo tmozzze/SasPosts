@@ -3,9 +3,7 @@
 package graph
 
 import (
-	"sync"
-
-	"github.com/tmozzze/SasPosts/internal/domain"
+	"github.com/redis/go-redis/v9"
 	"github.com/tmozzze/SasPosts/internal/repository"
 )
 
@@ -14,16 +12,15 @@ import (
 // It serves as dependency injection for your app, add any dependencies you require here.
 
 type Resolver struct {
-	PostRepo         repository.PostRepository
-	CommentRepo      repository.CommentRepository
-	commentObservers map[string][]chan *domain.Comment
-	mu               sync.Mutex
+	PostRepo    repository.PostRepository
+	CommentRepo repository.CommentRepository
+	Redis       *redis.Client
 }
 
-func NewResolver(postRepo repository.PostRepository, commentRepo repository.CommentRepository) *Resolver {
+func NewResolver(postRepo repository.PostRepository, commentRepo repository.CommentRepository, redisClient *redis.Client) *Resolver {
 	return &Resolver{
-		PostRepo:         postRepo,
-		CommentRepo:      commentRepo,
-		commentObservers: make(map[string][]chan *domain.Comment),
+		PostRepo:    postRepo,
+		CommentRepo: commentRepo,
+		Redis:       redisClient,
 	}
 }

@@ -1,10 +1,9 @@
 package utils
 
 import (
-	"fmt"
-	"time"
+	"github.com/google/uuid"
 )
 
 func GenerateID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	return uuid.NewString()
 }
