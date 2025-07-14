@@ -6,211 +6,151 @@ package graph
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/tmozzze/SasPosts/graph/generated"
 	"github.com/tmozzze/SasPosts/graph/model"
 	"github.com/tmozzze/SasPosts/internal/domain"
 )
 
-type mutationResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }
-type subscriptionResolver struct{ *Resolver }
-type postResolver struct{ *Resolver }
-type commentResolver struct{ *Resolver }
+// Children is the resolver for the children field.
+func (r *commentResolver) Children(ctx context.Context, obj *domain.Comment, limit *int, offset *int) ([]*domain.Comment, error) {
+	lim := 10
+	if limit != nil {
+		lim = *limit
+	}
+	ofs := 0
+	if offset != nil {
+		ofs = *offset
+	}
+	return r.CommentRepo.GetChildren(ctx, obj.ID, lim, ofs)
+}
 
 // CreatePost is the resolver for the createPost field.
-func (r *mutationResolver) CreatePost(ctx context.Context, input model.NewPostInput) (*model.Post, error) {
-	domainPost := &domain.Post{
-		Title:         input.Title,
-		Content:       input.Content,
-		Author:        input.Author,
-		AllowComments: input.AllowComments,
+func (r *mutationResolver) CreatePost(ctx context.Context, input model.NewPostInput) (*domain.Post, error) {
+	post := domain.NewPost(
+		input.Title,
+		input.Content,
+		input.Author,
+		input.AllowComments,
+	)
+
+	err := r.PostRepo.Create(ctx, post)
+	if err != nil {
+		return nil, err
 	}
 
-	if err := r.PostRepo.Create(ctx, domainPost); err != nil {
-		return nil, fmt.Errorf("ошибка при создании поста: %w", err)
-	}
-
-	return &model.Post{
-		ID:            domainPost.ID,
-		Title:         domainPost.Title,
-		Content:       domainPost.Content,
-		Author:        domainPost.Author,
-		AllowComments: domainPost.AllowComments,
-	}, nil
+	return post, nil
 }
 
 // CreateComment is the resolver for the createComment field.
-func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCommentInput) (*model.Comment, error) {
+func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCommentInput) (*domain.Comment, error) {
 	allowed, err := r.PostRepo.CheckAllowedComments(ctx, input.PostID)
 	if err != nil {
-		return nil, fmt.Errorf("failed check allowed comments %w", err)
+		return nil, err
 	}
 	if !allowed {
 		return nil, domain.ErrCommentsOff
 	}
 
-	domainComment, err := domain.NewComment(input.PostID, input.Author, input.ParentID, input.Content)
+	comment, err := domain.NewComment(input.PostID, input.Author, input.ParentID, input.Content)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := r.CommentRepo.Create(ctx, domainComment); err != nil {
-		return nil, fmt.Errorf("failed create comment %w", err)
+	if err := r.CommentRepo.Create(ctx, comment); err != nil {
+		return nil, err
 	}
 
-	return &model.Comment{
-		ID:        domainComment.ID,
-		PostID:    domainComment.PostID,
-		ParentID:  domainComment.ParentID,
-		Author:    domainComment.Author,
-		Content:   domainComment.Content,
-		CreatedAt: domainComment.CreatedAt,
-	}, nil
+	r.mu.Lock()
+	observers := r.commentObservers[comment.PostID]
+	for _, ch := range observers {
+		ch <- comment
+	}
+	r.mu.Unlock()
+
+	return comment, nil
 }
 
 // ToggleComments is the resolver for the toggleComments field.
-func (r *mutationResolver) ToggleComments(ctx context.Context, postID string, allow bool) (*model.Post, error) {
-	domainPost, err := r.PostRepo.GetByID(ctx, postID)
-	if err != nil {
-		return nil, err
-	}
-
+func (r *mutationResolver) ToggleComments(ctx context.Context, postID string, allow bool) (*domain.Post, error) {
 	if err := r.PostRepo.ToggleComments(ctx, postID, allow); err != nil {
 		return nil, err
 	}
-
-	return &model.Post{
-		ID:            domainPost.ID,
-		Title:         domainPost.Title,
-		Content:       domainPost.Content,
-		Author:        domainPost.Author,
-		AllowComments: allow,
-	}, nil
-}
-
-// Posts is the resolver for the posts field.
-func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
-	domainPosts, err := r.PostRepo.GetAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	modelPosts := make([]*model.Post, 0, len(domainPosts))
-	for _, p := range domainPosts {
-		modelPosts = append(modelPosts, &model.Post{
-			ID:            p.ID,
-			Title:         p.Title,
-			Content:       p.Content,
-			Author:        p.Author,
-			AllowComments: p.AllowComments,
-		})
-	}
-
-	return modelPosts, nil
-}
-
-// Post is the resolver for the post field.
-func (r *queryResolver) Post(ctx context.Context, id string) (*model.Post, error) {
-	domainPost, err := r.PostRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return &model.Post{
-		ID:            domainPost.ID,
-		Title:         domainPost.Title,
-		Content:       domainPost.Content,
-		Author:        domainPost.Author,
-		AllowComments: domainPost.AllowComments,
-	}, nil
+	return r.PostRepo.GetByID(ctx, postID)
 }
 
 // Comments is the resolver for the comments field.
-func (r *postResolver) Comments(ctx context.Context, obj *model.Post, limit *int, offset *int) ([]*model.Comment, error) {
-	l, o := 10, 0
+func (r *postResolver) Comments(ctx context.Context, obj *domain.Post, limit *int, offset *int) ([]*domain.Comment, error) {
+	lim := 10
 	if limit != nil {
-		l = *limit
+		lim = *limit
 	}
+	ofs := 0
 	if offset != nil {
-		o = *offset
+		ofs = *offset
 	}
-
-	domainComments, err := r.CommentRepo.GetByPost(ctx, obj.ID, l, o)
-	if err != nil {
-		return nil, err
-	}
-
-	modelComments := make([]*model.Comment, 0, len(domainComments))
-	for _, c := range domainComments {
-		modelComments = append(modelComments, &model.Comment{
-			ID:        c.ID,
-			PostID:    c.PostID,
-			ParentID:  c.ParentID,
-			Author:    c.Author,
-			Content:   c.Content,
-			CreatedAt: c.CreatedAt,
-		})
-	}
-
-	return modelComments, nil
+	return r.CommentRepo.GetByPost(ctx, obj.ID, lim, ofs)
 }
 
-// Children is the resolver for the children field
-func (r *commentResolver) Children(ctx context.Context, obj *model.Comment, limit *int, offset *int) ([]*model.Comment, error) {
-	l, o := 5, 0
-	if limit != nil {
-		l = *limit
-	}
-	if offset != nil {
-		o = *offset
-	}
+// Posts is the resolver for the posts field.
+func (r *queryResolver) Posts(ctx context.Context) ([]*domain.Post, error) {
+	return r.PostRepo.GetAll(ctx)
+}
 
-	domainComments, err := r.CommentRepo.GetChildren(ctx, obj.ID, l, o)
-	if err != nil {
-		return nil, err
-	}
-
-	modelComments := make([]*model.Comment, 0, len(domainComments))
-	for _, c := range domainComments {
-		modelComments = append(modelComments, &model.Comment{
-			ID:        c.ID,
-			PostID:    c.PostID,
-			ParentID:  c.ParentID,
-			Author:    c.Author,
-			Content:   c.Content,
-			CreatedAt: c.CreatedAt,
-		})
-	}
-
-	return modelComments, nil
+// Post is the resolver for the post field.
+func (r *queryResolver) Post(ctx context.Context, id string) (*domain.Post, error) {
+	return r.PostRepo.GetByID(ctx, id)
 }
 
 // CommentAdded is the resolver for the commentAdded field.
-func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *model.Comment, error) {
-	panic(fmt.Errorf("not implemented: CommentAdded - commentAdded"))
+func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *domain.Comment, error) {
+	post, err := r.PostRepo.GetByID(ctx, postID)
+	if err != nil {
+		return nil, err
+	}
+	if post == nil {
+		return nil, domain.ErrPostNotFound
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	ch := make(chan *domain.Comment, 1)
+	r.commentObservers[postID] = append(r.commentObservers[postID], ch)
+
+	go func() {
+		<-ctx.Done()
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		var updatedChans []chan *domain.Comment
+		for _, c := range r.commentObservers[postID] {
+			if c != ch {
+				updatedChans = append(updatedChans, c)
+			}
+		}
+		r.commentObservers[postID] = updatedChans
+	}()
+
+	return ch, nil
 }
 
-// Mutation returns MutationResolver implementation.
-func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
+// Comment returns generated.CommentResolver implementation.
+func (r *Resolver) Comment() generated.CommentResolver { return &commentResolver{r} }
 
-// Query returns QueryResolver implementation.
-func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
+// Mutation returns generated.MutationResolver implementation.
+func (r *Resolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
-// Subscription returns SubscriptionResolver implementation.
-func (r *Resolver) Subscription() SubscriptionResolver { return &subscriptionResolver{r} }
+// Post returns generated.PostResolver implementation.
+func (r *Resolver) Post() generated.PostResolver { return &postResolver{r} }
 
-// !!! WARNING !!!
-// The code below was going to be deleted when updating resolvers. It has been copied here so you have
-// one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
-/*
-	func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error) {
-	panic(fmt.Errorf("not implemented: CreateTodo - createTodo"))
-}
-func (r *queryResolver) Todos(ctx context.Context) ([]*model.Todo, error) {
-	panic(fmt.Errorf("not implemented: Todos - todos"))
-}
-*/
+// Query returns generated.QueryResolver implementation.
+func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
+
+// Subscription returns generated.SubscriptionResolver implementation.
+func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subscriptionResolver{r} }
+
+type commentResolver struct{ *Resolver }
+type mutationResolver struct{ *Resolver }
+type postResolver struct{ *Resolver }
+type queryResolver struct{ *Resolver }
+type subscriptionResolver struct{ *Resolver }

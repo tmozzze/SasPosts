@@ -1,3 +1,5 @@
+# graph/schema.graphqls
+
 scalar Time
 
 type Post {

@@ -9,6 +9,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/tmozzze/SasPosts/graph"
+	"github.com/tmozzze/SasPosts/graph/generated"
 	"github.com/tmozzze/SasPosts/internal/config"
 	"github.com/tmozzze/SasPosts/internal/repository"
 	"github.com/tmozzze/SasPosts/internal/repository/inmemory"
@@ -38,6 +39,8 @@ func main() {
 			log.Fatalf("failed connect to postgres %v", err)
 		}
 
+		log.Println("Successfully connected")
+
 		postRepo = postgres.NewPostgresPostRepository(dbpool)
 		commentRepo = postgres.NewPostgresCommentRepository(dbpool)
 
@@ -47,15 +50,9 @@ func main() {
 		commentRepo = inmemory.NewInMemoryCommentRepository()
 	}
 
-	resolver := &graph.Resolver{
-		PostRepo:    postRepo,
-		CommentRepo: commentRepo,
-	}
+	resolver := graph.NewResolver(postRepo, commentRepo)
 
-	server := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{
-		Resolvers: resolver,
-	}),
-	)
+	server := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
 	server.SetErrorPresenter(graph.ErrorPresenter)
 
 	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
