@@ -1,8 +1,8 @@
-Технологии:
-gqlgen, PostgreSQL, pgx, Redis, Docker и Docker Compose, testify и mockery
+**Технологии:**
+- gqlgen, PostgreSQL, pgx, Redis, Docker и Docker Compose, testify и mockery
 
 
-Функционал:
+**Функционал:**
 1. Создание и просмотр постов
 2. Возможность запретить комментирование для конкретного поста
 3. Создание иерархических комментариев
@@ -10,21 +10,27 @@ gqlgen, PostgreSQL, pgx, Redis, Docker и Docker Compose, testify и mockery
 5. Подписки на новые комментарии к посту
 
 
-Запуск
+**ЗАПУСК**
+
 В терминале:
-    docker-compose up -d
+- docker-compose up -d
 
 Другой терминал:
-    go run cmd/server/main.go       - по дефолту запускается хранилище PostgreSQL
+- go run cmd/server/main.go
 
-или для хранилища in-memory:
-    DB_TYPE=inmemory \ go run cmd/server/main.go
+    по дефолту запускается хранилище PostgreSQL
+
+    *или для in-memory:*
+
+- DB_TYPE=inmemory \ go run cmd/server/main.go
 
 
 Для API
-    После запуска приложения. В браузере localhost:8080
+
+После запуска приложения. В браузере
+- localhost:8080
 
 Для запуска юнит-тестов
-    go test ./...
+- go test ./...
 
 
