@@ -9,22 +9,18 @@ import (
 	"github.com/tmozzze/SasPosts/internal/domain"
 )
 
-type inMemoryCommentRepository struct {
+type InMemoryCommentRepository struct {
 	mu       sync.RWMutex
 	comments map[string]*domain.Comment
-	byPost   map[string][]string
-	byParent map[string][]string
 }
 
-func NewInMemoryCommentRepository() *inMemoryCommentRepository {
-	return &inMemoryCommentRepository{
+func NewInMemoryCommentRepository() *InMemoryCommentRepository {
+	return &InMemoryCommentRepository{
 		comments: make(map[string]*domain.Comment),
-		byPost:   make(map[string][]string),
-		byParent: make(map[string][]string),
 	}
 }
 
-func (r *inMemoryCommentRepository) Create(ctx context.Context, comment *domain.Comment) error {
+func (r *InMemoryCommentRepository) Create(ctx context.Context, comment *domain.Comment) error {
 	if utf8.RuneCountInString(comment.Content) > domain.MaxCommentLength {
 		return domain.ErrCommentTooLong
 	}
@@ -45,16 +41,10 @@ func (r *inMemoryCommentRepository) Create(ctx context.Context, comment *domain.
 	}
 
 	r.comments[comment.ID] = comment
-	r.byPost[comment.PostID] = append(r.byPost[comment.PostID], comment.ID)
-
-	if comment.ParentID != nil {
-		r.byParent[*comment.ParentID] = append(r.byParent[*comment.ParentID], comment.ID)
-	}
 	return nil
 }
 
-// коммент по id
-func (r *inMemoryCommentRepository) GetByID(ctx context.Context, id string) (*domain.Comment, error) {
+func (r *InMemoryCommentRepository) GetByID(ctx context.Context, id string) (*domain.Comment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -65,92 +55,54 @@ func (r *inMemoryCommentRepository) GetByID(ctx context.Context, id string) (*do
 	return comment, nil
 }
 
-// комменты по посту с пагинацией
-func (r *inMemoryCommentRepository) GetByPost(ctx context.Context, postID string, limit, offset int) ([]*domain.Comment, error) {
+func (r *InMemoryCommentRepository) GetByPost(ctx context.Context, postID string, limit, offset int) ([]*domain.Comment, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	commentIDs, exists := r.byPost[postID]
-	if !exists {
-		return []*domain.Comment{}, nil
-	}
-
-	comments := make([]*domain.Comment, 0, len(commentIDs))
-
-	for _, id := range commentIDs {
-		if comment, ok := r.comments[id]; ok {
-			comments = append(comments, comment)
+	var results []*domain.Comment
+	for _, comment := range r.comments {
+		if comment.PostID == postID && comment.ParentID == nil {
+			results = append(results, comment)
 		}
 	}
 
-	sortCommentsByCreatedAt(comments)
+	sortCommentsByCreatedAt(results)
 
-	//пагинация
 	start := offset
-	if start > len(comments) {
-		start = len(comments)
-	}
-	end := start + limit
-	if end > len(comments) {
-		end = len(comments)
-	}
-
-	return comments[start:end], nil
-}
-
-// дочерние комменты по родителю с пагинацией
-func (r *inMemoryCommentRepository) GetChildren(ctx context.Context, parentID string, limit, offset int) ([]*domain.Comment, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	commentsIDs, exists := r.byParent[parentID]
-	if !exists {
+	if start >= len(results) {
 		return []*domain.Comment{}, nil
 	}
+	end := start + limit
+	if end > len(results) {
+		end = len(results)
+	}
 
-	comments := make([]*domain.Comment, 0, len(commentsIDs))
-	for _, id := range commentsIDs {
-		if comment, ok := r.comments[id]; ok {
-			comments = append(comments, comment)
+	return results[start:end], nil
+}
+
+func (r *InMemoryCommentRepository) GetChildren(ctx context.Context, parentID string, limit, offset int) ([]*domain.Comment, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var results []*domain.Comment
+
+	for _, comment := range r.comments {
+		if comment.ParentID != nil && *comment.ParentID == parentID {
+			results = append(results, comment)
 		}
 	}
-	sortCommentsByCreatedAt(comments)
+	sortCommentsByCreatedAt(results)
 
-	//пагинация
 	start := offset
-	if start > len(comments) {
-		start = len(comments)
+	if start >= len(results) {
+		return []*domain.Comment{}, nil
 	}
 	end := start + limit
-	if end > len(comments) {
-		end = len(comments)
+	if end > len(results) {
+		end = len(results)
 	}
 
-	return comments[start:end], nil
-}
-
-func (r *inMemoryCommentRepository) CountByPost(ctx context.Context, postID string) (int, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	commentIDs, exists := r.byPost[postID]
-	if !exists {
-		return 0, nil
-	}
-
-	return len(commentIDs), nil
-}
-
-func (r *inMemoryCommentRepository) CountChildren(ctx context.Context, parentID string) (int, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	commentIDs, exists := r.byParent[parentID]
-	if !exists {
-		return 0, nil
-	}
-
-	return len(commentIDs), nil
+	return results[start:end], nil
 }
 
 func sortCommentsByCreatedAt(comments []*domain.Comment) {

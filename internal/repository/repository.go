@@ -20,6 +20,4 @@ type CommentRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.Comment, error)
 	GetByPost(ctx context.Context, postID string, limit int, offset int) ([]*domain.Comment, error)
 	GetChildren(ctx context.Context, parentID string, limit int, offset int) ([]*domain.Comment, error)
-	CountByPost(ctx context.Context, postID string) (int, error)
-	CountChildren(ctx context.Context, parentID string) (int, error)
 }

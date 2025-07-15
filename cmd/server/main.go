@@ -13,6 +13,7 @@ import (
 	"github.com/tmozzze/SasPosts/graph"
 	"github.com/tmozzze/SasPosts/graph/generated"
 	"github.com/tmozzze/SasPosts/internal/config"
+	myRedis "github.com/tmozzze/SasPosts/internal/redis"
 	"github.com/tmozzze/SasPosts/internal/repository"
 	"github.com/tmozzze/SasPosts/internal/repository/inmemory"
 	"github.com/tmozzze/SasPosts/internal/repository/postgres"
@@ -39,6 +40,8 @@ func main() {
 		log.Fatalf("Could not connect to Redis %v", err)
 	}
 	log.Println("Successfully connected to Redis")
+
+	redisPublisher := myRedis.NewPubSub(redisClient)
 
 	var postRepo repository.PostRepository
 	var commentRepo repository.CommentRepository
@@ -67,7 +70,7 @@ func main() {
 		commentRepo = inmemory.NewInMemoryCommentRepository()
 	}
 
-	resolver := graph.NewResolver(postRepo, commentRepo, redisClient)
+	resolver := graph.NewResolver(postRepo, commentRepo, redisPublisher)
 
 	server := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
 	server.SetErrorPresenter(graph.ErrorPresenter)

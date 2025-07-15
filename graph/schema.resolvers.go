@@ -6,6 +6,8 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/tmozzze/SasPosts/graph/generated"
 	"github.com/tmozzze/SasPosts/graph/model"
@@ -52,7 +54,13 @@ func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCom
 		return nil, domain.ErrCommentsOff
 	}
 
-	comment, err := domain.NewComment(input.PostID, input.Author, input.ParentID, input.Content)
+	comment, err := domain.NewComment(
+		input.PostID,
+		input.Author,
+		input.ParentID,
+		input.Content,
+	)
+
 	if err != nil {
 		return nil, err
 	}
@@ -61,12 +69,8 @@ func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCom
 		return nil, err
 	}
 
-	r.mu.Lock()
-	observers := r.commentObservers[comment.PostID]
-	for _, ch := range observers {
-		ch <- comment
-	}
-	r.mu.Unlock()
+	channelName := fmt.Sprintf("comments:%s", comment.PostID)
+	r.PubSub.Publish(ctx, channelName, comment)
 
 	return comment, nil
 }
@@ -104,34 +108,33 @@ func (r *queryResolver) Post(ctx context.Context, id string) (*domain.Post, erro
 
 // CommentAdded is the resolver for the commentAdded field.
 func (r *subscriptionResolver) CommentAdded(ctx context.Context, postID string) (<-chan *domain.Comment, error) {
-	post, err := r.PostRepo.GetByID(ctx, postID)
+	_, err := r.PostRepo.GetByID(ctx, postID)
 	if err != nil {
-		return nil, err
-	}
-	if post == nil {
-		return nil, domain.ErrPostNotFound
+		return nil, fmt.Errorf("failed to get post: %w", err)
 	}
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	channelName := fmt.Sprintf("comments:%s", postID)
+	msgChan, closeFunc := r.PubSub.Subscribe(ctx, channelName)
 
-	ch := make(chan *domain.Comment, 1)
-	r.commentObservers[postID] = append(r.commentObservers[postID], ch)
+	gqlChan := make(chan *domain.Comment)
 
 	go func() {
-		<-ctx.Done()
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		var updatedChans []chan *domain.Comment
-		for _, c := range r.commentObservers[postID] {
-			if c != ch {
-				updatedChans = append(updatedChans, c)
+		defer closeFunc()
+		defer close(gqlChan)
+
+		for payload := range msgChan {
+			var comment domain.Comment
+			if err := json.Unmarshal(payload, &comment); err == nil {
+				select {
+				case gqlChan <- &comment:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
-		r.commentObservers[postID] = updatedChans
 	}()
 
-	return ch, nil
+	return gqlChan, nil
 }
 
 // Comment returns generated.CommentResolver implementation.

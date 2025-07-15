@@ -3,7 +3,7 @@
 package graph
 
 import (
-	"github.com/redis/go-redis/v9"
+	myRedis "github.com/tmozzze/SasPosts/internal/redis"
 	"github.com/tmozzze/SasPosts/internal/repository"
 )
 
@@ -14,13 +14,13 @@ import (
 type Resolver struct {
 	PostRepo    repository.PostRepository
 	CommentRepo repository.CommentRepository
-	Redis       *redis.Client
+	PubSub      myRedis.PubSub
 }
 
-func NewResolver(postRepo repository.PostRepository, commentRepo repository.CommentRepository, redisClient *redis.Client) *Resolver {
+func NewResolver(postRepo repository.PostRepository, commentRepo repository.CommentRepository, pubsub myRedis.PubSub) *Resolver {
 	return &Resolver{
 		PostRepo:    postRepo,
 		CommentRepo: commentRepo,
-		Redis:       redisClient,
+		PubSub:      pubsub,
 	}
 }
